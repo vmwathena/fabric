@@ -8,7 +8,12 @@ package lockbasedtxmgr
 import (
 	"fmt"
 
+	pb "github.com/hyperledger/fabric/protos/peer"
+	"context"
+	"time"
+	"google.golang.org/grpc"
 	commonledger "github.com/hyperledger/fabric/common/ledger"
+	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/version"
 	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/rwsetutil"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/txmgr"
@@ -23,13 +28,23 @@ type lockBasedTxSimulator struct {
 	pvtdataQueriesPerformed   bool
 	simulationResultsComputed bool
 	paginatedQueriesPerformed bool
+	accessClient              pb.AccessClient
+
 }
 
 func newLockBasedTxSimulator(txmgr *LockBasedTxMgr, txid string) (*lockBasedTxSimulator, error) {
 	rwsetBuilder := rwsetutil.NewRWSetBuilder()
 	helper := newQueryHelper(txmgr, rwsetBuilder)
+
+	// init a gRPC client 
+	conn, err := grpc.Dial("10.192.101.235:50051", grpc.WithInsecure())
+        if err != nil {
+                logger.Fatalf("did not connect: %v", err)
+        }
+	client := pb.NewAccessClient(conn)
+
 	logger.Debugf("constructing new tx simulator txid = [%s]", txid)
-	return &lockBasedTxSimulator{lockBasedQueryExecutor{helper, txid}, rwsetBuilder, false, false, false, false}, nil
+	return &lockBasedTxSimulator{lockBasedQueryExecutor{helper, txid}, rwsetBuilder, false, false, false, false, client}, nil
 }
 
 // SetState implements method in interface `ledger.TxSimulator`
@@ -39,6 +54,24 @@ func (s *lockBasedTxSimulator) SetState(ns string, key string, value []byte) err
 	}
 	s.rwsetBuilder.AddToWriteSet(ns, key, value)
 	return nil
+}
+
+func (s *lockBasedTxSimulator) GetRemoteState(ns string, key string) ([]byte, error) {
+// use grpc client get state here !!!
+        ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+        defer cancel()
+	kvbKey :=  fmt.Sprintf("%v-%v", ns, key)
+	kvbState := pb.KvbMessage_VALID
+	res, err := s.accessClient.GetState(ctx, &pb.KvbMessage{State: &kvbState, Key:  &kvbKey})
+	if err != nil{
+	    return nil, err
+	}
+	resString := *res.Value
+	resBytes := []byte(resString)
+
+	// hard code version here
+	s.rwsetBuilder.AddToReadSet(ns, key, &version.Height{999, 999})
+	return resBytes, nil
 }
 
 // DeleteState implements method in interface `ledger.TxSimulator`

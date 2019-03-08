@@ -177,6 +177,8 @@ type TxSimulator interface {
 	QueryExecutor
 	// SetState sets the given value for the given namespace and key. For a chaincode, the namespace corresponds to the chaincodeId
 	SetState(namespace string, key string, value []byte) error
+	// GetRemote state get the chaincode state from kv-blockchain
+	GetRemoteState(namespace string, key string) ([]byte, error)
 	// DeleteState deletes the given namespace and key
 	DeleteState(namespace string, key string) error
 	// SetMultipleKeys sets the values for multiple keys in a single call

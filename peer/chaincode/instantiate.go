@@ -94,6 +94,8 @@ func instantiate(cmd *cobra.Command, cf *ChaincodeCmdFactory) (*protcommon.Envel
 			return nil, fmt.Errorf("could not assemble transaction, err %s", err)
 		}
 
+    fmt.Println(proposalResponse.Response.Status)
+
 		return env, nil
 	}
 

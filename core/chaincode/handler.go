@@ -574,7 +574,11 @@ func (h *Handler) HandleGetState(msg *pb.ChaincodeMessage, txContext *Transactio
 	if isCollectionSet(getState.Collection) {
 		res, err = txContext.TXSimulator.GetPrivateData(chaincodeName, getState.Collection, getState.Key)
 	} else {
-		res, err = txContext.TXSimulator.GetState(chaincodeName, getState.Key)
+		if  h.SystemCCProvider.IsSysCC(chaincodeName) {
+		    res, err = txContext.TXSimulator.GetState(chaincodeName, getState.Key)
+		} else {
+		    res, err = txContext.TXSimulator.GetRemoteState(chaincodeName, getState.Key)
+		}
 	}
 	if err != nil {
 		return nil, errors.WithStack(err)

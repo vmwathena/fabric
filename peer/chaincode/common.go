@@ -8,6 +8,8 @@ package chaincode
 
 import (
 	"context"
+	"time"
+	"google.golang.org/grpc"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -21,7 +23,8 @@ import (
 	"github.com/hyperledger/fabric/common/localmsp"
 	"github.com/hyperledger/fabric/common/util"
 	"github.com/hyperledger/fabric/core/chaincode"
-	"github.com/hyperledger/fabric/core/chaincode/shim"
+	//"github.com/hyperledger/fabric/core/chaincode/shim"
+	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/rwsetutil"
 	"github.com/hyperledger/fabric/core/container"
 	"github.com/hyperledger/fabric/msp"
 	ccapi "github.com/hyperledger/fabric/peer/chaincode/api"
@@ -128,6 +131,45 @@ func chaincodeInvokeOrQuery(cmd *cobra.Command, invoke bool, cf *ChaincodeCmdFac
 			return errors.Errorf("endorsement failure during invoke. response: %v", proposalResp.Response)
 		}
 		logger.Infof("Chaincode invoke successful. result: %v", ca.Response)
+		if ca.Results != nil {
+			txRWSet := &rwsetutil.TxRwSet{}
+			if err = txRWSet.FromProtoBytes(ca.Results); err != nil {
+				return err
+			}
+
+			conn, err := grpc.Dial("10.192.101.235:50051", grpc.WithInsecure())
+                        if err != nil {
+                                logger.Fatalf("did not connect: %v", err)
+                        }
+
+                        client := pb.NewAccessClient(conn)
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+                        defer cancel()
+
+			for _, nsRWSet := range txRWSet.NsRwSets {
+				ns := nsRWSet.NameSpace
+
+				for _, kvWrite := range nsRWSet.KvRwSet.Writes {
+					writeKey := fmt.Sprintf("%v-%v",ns, kvWrite.Key)
+					writeValue := string(kvWrite.Value)
+					kvbState := pb.KvbMessage_VALID
+					fmt.Printf("writing -> %v=%v\n",writeKey, writeValue)
+					res, err := client.PutState(ctx, &pb.KvbMessage{State: &kvbState, Key: &writeKey, Value: &writeValue})
+					// compare the value rather than pointer
+                                        if err != nil || *res.State != kvbState {
+			                    return errors.New("error during query: received nil proposal response")
+                                        }
+				}
+			}
+			// write concord block
+			res, err := client.WriteBlock(ctx, &pb.KvbMessage{});
+                        if err != nil || *res.State != pb.KvbMessage_VALID {
+			    return errors.New("Error while writing to concord kvb")
+		        } else {
+		            fmt.Println("Successfully wrote data to concord kvb")
+			}
+		}
 	} else {
 		if proposalResp == nil {
 			return errors.New("error during query: received nil proposal response")
@@ -453,7 +495,7 @@ func ChaincodeInvokeOrQuery(
 		}
 	}
 
-	prop, txid, err := putils.CreateChaincodeProposalWithTxIDAndTransient(pcommon.HeaderType_ENDORSER_TRANSACTION, cID, invocation, creator, txID, tMap)
+	prop, _, err := putils.CreateChaincodeProposalWithTxIDAndTransient(pcommon.HeaderType_ENDORSER_TRANSACTION, cID, invocation, creator, txID, tMap)
 	if err != nil {
 		return nil, errors.WithMessage(err, fmt.Sprintf("error creating proposal for %s", funcName))
 	}
@@ -478,46 +520,6 @@ func ChaincodeInvokeOrQuery(
 	// all responses will be checked when the signed transaction is created.
 	// for now, just set this so we check the first response's status
 	proposalResp := responses[0]
-
-	if invoke {
-		if proposalResp != nil {
-			if proposalResp.Response.Status >= shim.ERRORTHRESHOLD {
-				return proposalResp, nil
-			}
-			// assemble a signed transaction (it's an Envelope message)
-			env, err := putils.CreateSignedTx(prop, signer, responses...)
-			if err != nil {
-				return proposalResp, errors.WithMessage(err, "could not assemble transaction")
-			}
-			var dg *deliverGroup
-			var ctx context.Context
-			if waitForEvent {
-				var cancelFunc context.CancelFunc
-				ctx, cancelFunc = context.WithTimeout(context.Background(), waitForEventTimeout)
-				defer cancelFunc()
-
-				dg = newDeliverGroup(deliverClients, peerAddresses, certificate, channelID, txid)
-				// connect to deliver service on all peers
-				err := dg.Connect(ctx)
-				if err != nil {
-					return nil, err
-				}
-			}
-
-			// send the envelope for ordering
-			if err = bc.Send(env); err != nil {
-				return proposalResp, errors.WithMessage(err, fmt.Sprintf("error sending transaction for %s", funcName))
-			}
-
-			if dg != nil && ctx != nil {
-				// wait for event that contains the txid from all peers
-				err = dg.Wait(ctx)
-				if err != nil {
-					return nil, err
-				}
-			}
-		}
-	}
 
 	return proposalResp, nil
 }
