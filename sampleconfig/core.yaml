@@ -687,3 +687,13 @@ metrics:
 
               # prometheus http server listen address for pull metrics
               listenAddress: 0.0.0.0:8080
+
+###############################################################################
+#
+#    Concord section
+#
+#
+###############################################################################
+concord:
+        address: 0.0.0.0:50051
+

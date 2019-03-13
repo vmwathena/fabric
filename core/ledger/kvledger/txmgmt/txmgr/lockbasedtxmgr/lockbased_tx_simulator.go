@@ -18,6 +18,7 @@ import (
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/rwsetutil"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/txmgr"
 	"github.com/pkg/errors"
+  "github.com/spf13/viper"
 )
 
 // LockBasedTxSimulator is a transaction simulator used in `LockBasedTxMgr`
@@ -37,7 +38,9 @@ func newLockBasedTxSimulator(txmgr *LockBasedTxMgr, txid string) (*lockBasedTxSi
 	helper := newQueryHelper(txmgr, rwsetBuilder)
 
 	// init a gRPC client 
-	conn, err := grpc.Dial("10.192.101.235:50051", grpc.WithInsecure())
+  concord := viper.GetString("concord.address")
+  conn, err := grpc.Dial(concord, grpc.WithInsecure())
+	//conn, err := grpc.Dial("10.192.101.235:50051", grpc.WithInsecure())
         if err != nil {
                 logger.Fatalf("did not connect: %v", err)
         }

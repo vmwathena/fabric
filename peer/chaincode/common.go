@@ -137,7 +137,9 @@ func chaincodeInvokeOrQuery(cmd *cobra.Command, invoke bool, cf *ChaincodeCmdFac
 				return err
 			}
 
-			conn, err := grpc.Dial("10.192.101.235:50051", grpc.WithInsecure())
+      concord := viper.GetString("concord.address")
+			//conn, err := grpc.Dial("10.192.101.235:50051", grpc.WithInsecure())
+			conn, err := grpc.Dial(concord, grpc.WithInsecure())
                         if err != nil {
                                 logger.Fatalf("did not connect: %v", err)
                         }
