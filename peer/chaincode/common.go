@@ -156,7 +156,7 @@ func chaincodeInvokeOrQuery(cmd *cobra.Command, invoke bool, cf *ChaincodeCmdFac
 					writeKey := fmt.Sprintf("%v-%v",ns, kvWrite.Key)
 					writeValue := string(kvWrite.Value)
 					kvbState := pb.KvbMessage_VALID
-					fmt.Printf("writing -> %v=%v\n",writeKey, writeValue)
+					fmt.Printf("Updated key-value pair -> %v=%v\n",writeKey, writeValue)
 					res, err := client.PutState(ctx, &pb.KvbMessage{State: &kvbState, Key: &writeKey, Value: &writeValue})
 					// compare the value rather than pointer
                                         if err != nil || *res.State != kvbState {

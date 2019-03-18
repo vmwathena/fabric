@@ -15,6 +15,10 @@ import (
 	pb "github.com/hyperledger/fabric/protos/peer"
 	"github.com/hyperledger/fabric/protos/utils"
 	"github.com/spf13/cobra"
+
+  "github.com/spf13/viper"
+  "time"
+  "google.golang.org/grpc"
 )
 
 var chaincodeInstantiateCmd *cobra.Command
@@ -129,5 +133,21 @@ func chaincodeDeploy(cmd *cobra.Command, args []string, cf *ChaincodeCmdFactory)
 		err = cf.BroadcastClient.Send(env)
 	}
 
+  concord := viper.GetString("concord.address")
+	conn, err := grpc.Dial(concord, grpc.WithInsecure())
+  if err != nil {
+    logger.Fatalf("did not connect: %v", err)
+  }
+
+  client := pb.NewAccessClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+  defer cancel()
+  res, err := client.WriteBlock(ctx, &pb.KvbMessage{});
+  if err != nil || *res.State != pb.KvbMessage_VALID {
+		return errors.New("Error while writing data to concord kvb")
+	} else {
+	  fmt.Println("Successfully wrote data to concord kvb")
+  }
 	return err
 }

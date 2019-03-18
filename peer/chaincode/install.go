@@ -21,6 +21,10 @@ import (
 	"github.com/hyperledger/fabric/protos/utils"
 
 	"github.com/spf13/cobra"
+  "github.com/spf13/viper"
+  "google.golang.org/grpc"
+  "github.com/pkg/errors"
+  "time"
 )
 
 var chaincodeInstallCmd *cobra.Command
@@ -86,6 +90,23 @@ func install(msg proto.Message, cf *ChaincodeCmdFactory) error {
 	if proposalResponse != nil {
 		logger.Infof("Installed remotely %v", proposalResponse)
 	}
+
+  concord := viper.GetString("concord.address")
+  conn, err := grpc.Dial(concord, grpc.WithInsecure())
+  if err != nil {
+    logger.Fatalf("did not connect: %v", err)
+    return err
+  }
+  client := pb.NewAccessClient(conn)
+  ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+  defer cancel()
+  res, err := client.WriteBlock(ctx, &pb.KvbMessage{});
+
+  if err != nil || *res.State != pb.KvbMessage_VALID {
+		return errors.New("Error while writing data to concord kvb")
+	} else {
+	  fmt.Println("Successfully wrote data to concord kvb")
+  }
 
 	return nil
 }
