@@ -10,9 +10,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+  "strings"
 
+  putils "github.com/hyperledger/fabric/protos/utils"
 	protcommon "github.com/hyperledger/fabric/protos/common"
 	pb "github.com/hyperledger/fabric/protos/peer"
+  "github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/rwsetutil"
 	"github.com/hyperledger/fabric/protos/utils"
 	"github.com/spf13/cobra"
 
@@ -91,13 +94,59 @@ func instantiate(cmd *cobra.Command, cf *ChaincodeCmdFactory) (*protcommon.Envel
 		return nil, fmt.Errorf("error endorsing %s: %s", chainFuncName, err)
 	}
 
+  // need to be refactor, put these operaton into one function
 	if proposalResponse != nil {
+    // extract the chaincode payload
+    pRespPayload, err := putils.GetProposalResponsePayload(proposalResponse.Payload)
+		if err != nil {
+			return nil, errors.New("error while unmarshaling proposal response payload")
+		}
+
+		ca, err := putils.GetChaincodeAction(pRespPayload.Extension)
+		if err != nil {
+			return nil, errors.New("error while unmarshaling chaincode action")
+		}
+
+    if ca.Results != nil {
+      // create gRPC connection
+      concord := viper.GetString("concord.address")
+      conn, err := grpc.Dial(concord, grpc.WithInsecure())
+      if err != nil {
+        logger.Fatalf("did not connect: %v", err)
+      }
+      client := pb.NewAccessClient(conn)
+      ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+      defer cancel()
+
+      // send k/v update to Concord
+      txRWSet := &rwsetutil.TxRwSet{}
+			if err = txRWSet.FromProtoBytes(ca.Results); err != nil {
+				return nil, err
+			}
+      for _, nsRWSet := range txRWSet.NsRwSets {
+        ns := nsRWSet.NameSpace
+        if strings.HasPrefix(ns, "lscc") {
+          continue
+        }
+        for _, kvWrite := range nsRWSet.KvRwSet.Writes {
+					writeKey := fmt.Sprintf("%v-%v",ns, kvWrite.Key)
+					writeValue := string(kvWrite.Value)
+					kvbState := pb.KvbMessage_VALID
+					fmt.Printf("Updated key-value pair -> %v=%v\n",writeKey, writeValue)
+					res, err := client.PutState(ctx, &pb.KvbMessage{State: &kvbState, Key: &writeKey, Value: &writeValue})
+					// compare the value rather than pointer
+          if err != nil || *res.State != kvbState {
+			      return nil, errors.New("error during query: received nil proposal response")
+          }
+				}
+      }
+    }
+
 		// assemble a signed transaction (it's an Envelope message)
 		env, err := utils.CreateSignedTx(prop, cf.Signer, proposalResponse)
 		if err != nil {
 			return nil, fmt.Errorf("could not assemble transaction, err %s", err)
 		}
-
     fmt.Println(proposalResponse.Response.Status)
 
 		return env, nil
