@@ -95,6 +95,8 @@ func upgrade(cmd *cobra.Command, cf *ChaincodeCmdFactory) (*protcommon.Envelope,
 			return nil, fmt.Errorf("could not assemble transaction, err %s", err)
 		}
 		logger.Debug("Get Signed envelope")
+
+    fmt.Println(proposalResponse.Response.Status)
 		return env, nil
 	}
 
