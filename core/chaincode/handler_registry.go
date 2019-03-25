@@ -19,6 +19,7 @@ type HandlerRegistry struct {
 	mutex     sync.Mutex              // lock covering handlers and launching
 	handlers  map[string]*Handler     // chaincode cname to associated handler
 	launching map[string]*LaunchState // launching chaincodes to LaunchState
+  currentVersion map[string]string // store the current version of chaincode, it can be used to delete previous container after upgrade
 }
 
 type LaunchState struct {
@@ -60,6 +61,7 @@ func NewHandlerRegistry(allowUnsolicitedRegistration bool) *HandlerRegistry {
 	return &HandlerRegistry{
 		handlers:                     map[string]*Handler{},
 		launching:                    map[string]*LaunchState{},
+    currentVersion:               map[string]string{},
 		allowUnsolicitedRegistration: allowUnsolicitedRegistration,
 	}
 }
@@ -119,6 +121,22 @@ func (r *HandlerRegistry) Handler(cname string) *Handler {
 	h := r.handlers[cname]
 	r.mutex.Unlock()
 	return h
+}
+
+// Remove the legacy chaincode container
+func (r *HandlerRegistry) UpdateChaincodeVersion(cname, cversion string) string {
+  var result string = ""
+
+	r.mutex.Lock()
+
+  if version, ok := r.currentVersion[cname]; ok {
+    result = version
+  }
+
+  r.currentVersion[cname] = cversion
+
+	r.mutex.Unlock()
+	return result
 }
 
 // Register adds a chaincode handler to the registry.

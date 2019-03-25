@@ -9,6 +9,7 @@ package chaincode
 import (
 	"fmt"
 	"time"
+  "strings"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric/common/util"
@@ -220,6 +221,17 @@ func (cs *ChaincodeSupport) ExecuteLegacyInit(txParams *ccprovider.TransactionPa
 	if h == nil {
 		return nil, nil, errors.Wrapf(err, "[channel %s] claimed to start chaincode container for %s but could not find handler", txParams.ChannelID, cname)
 	}
+//
+//  // remove legacy container while upgrading the chaincode
+  version := cs.HandlerRegistry.UpdateChaincodeVersion(ccci.Name, ccci.Version)
+  if len(version) != 0 && !strings.Contains(cname, "scc:") {
+    ccci.Version = version
+    err = cs.Stop(ccci)
+	  if err != nil {
+      return nil, nil, err
+	  }
+    ccci.Version = cccid.Version
+  }
 
 	resp, err := cs.execute(pb.ChaincodeMessage_INIT, txParams, cccid, spec.GetChaincodeSpec().Input, h)
 	return processChaincodeExecutionResult(txParams.TxID, cccid.Name, resp, err)
