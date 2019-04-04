@@ -1,0 +1,48 @@
+syntax = "proto2";
+package protos;
+
+option go_package = "github.com/hyperledger/fabric/protos/peer";
+
+service Access {
+  rpc GetState (KvbMessage) returns (KvbMessage) {}
+  rpc PutState (KvbMessage) returns (KvbMessage) {}
+  rpc WriteBlock (KvbMessage) returns (KvbMessage) {}
+  // use chaincode name + key as the KEY 
+  rpc GetHistoryForKey (KvbMessage) returns (QueryResponseConcord) {}
+  // GetStateNext is used for pagination purpose
+
+  // rpc AddTransaction (KvbMessage) returns (KvbMessage){}
+}
+
+message KvbMessage {
+  enum type {
+      VALID = 0;
+      INVALID = 1;
+  }
+  optional type state = 1;
+  optional string key = 2;
+  optional string value = 3;
+}
+
+
+// For the purpose of Rang query
+message QueryResponseConcord {
+	repeated bytes results = 1;
+  optional bool has_more = 2;
+  optional string id = 3;
+  optional bytes metadata = 4;
+}
+
+message QueryResultBytesConcord {
+  optional bytes result_bytes = 1;
+}
+
+// In GetHistoryFoKey, the bytes in QueryResultBytes are marshalled from
+// KeyModification 
+message KeyModificationConcord {
+  optional string tx_id = 1;  // tx_id is mismatched between Concord and HLF,
+                              // return the Concord one
+  optional bytes value = 2;
+  optional int64 timestamp = 3;
+  optional bool is_delete = 4;
+}
