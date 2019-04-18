@@ -140,14 +140,14 @@ func chaincodeInvokeOrQuery(cmd *cobra.Command, invoke bool, cf *ChaincodeCmdFac
       concord := viper.GetString("concord.address")
 			//conn, err := grpc.Dial("10.192.101.235:50051", grpc.WithInsecure())
 			conn, err := grpc.Dial(concord, grpc.WithInsecure())
-                        if err != nil {
-                                logger.Fatalf("did not connect: %v", err)
-                        }
 
-                        client := pb.NewAccessClient(conn)
+      if err != nil {
+        logger.Errorf("did not connect: %v", err)
+      }
+      client := pb.NewAccessClient(conn)
 
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-                        defer cancel()
+      defer cancel()
 
 			for _, nsRWSet := range txRWSet.NsRwSets {
 				ns := nsRWSet.NameSpace
@@ -156,20 +156,20 @@ func chaincodeInvokeOrQuery(cmd *cobra.Command, invoke bool, cf *ChaincodeCmdFac
 					writeKey := fmt.Sprintf("%v-%v",ns, kvWrite.Key)
 					writeValue := string(kvWrite.Value)
 					kvbState := pb.KvbMessage_VALID
-					fmt.Printf("Updated key-value pair -> %v=%v\n",writeKey, writeValue)
+					fmt.Printf("Updated key-value pair -> %v=%v\n", writeKey, writeValue)
 					res, err := client.PutState(ctx, &pb.KvbMessage{State: &kvbState, Key: &writeKey, Value: &writeValue})
 					// compare the value rather than pointer
-                                        if err != nil || *res.State != kvbState {
-			                    return errors.New("error during query: received nil proposal response")
-                                        }
+          if err != nil || *res.State != kvbState {
+            return errors.New("Unable to put state")
+          }
 				}
 			}
 			// write concord block
 			res, err := client.WriteBlock(ctx, &pb.KvbMessage{});
-                        if err != nil || *res.State != pb.KvbMessage_VALID {
-			    return errors.New("Error while writing to concord kvb")
-		        } else {
-		            fmt.Println("Successfully wrote data to concord kvb")
+      if err != nil || *res.State != pb.KvbMessage_VALID {
+			  return errors.New("Error while writing to concord kvb")
+		  } else {
+		    fmt.Println("Successfully wrote data to concord kvb")
 			}
 		}
 	} else {

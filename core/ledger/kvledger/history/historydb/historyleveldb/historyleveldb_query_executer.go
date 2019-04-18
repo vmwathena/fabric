@@ -7,7 +7,10 @@ SPDX-License-Identifier: Apache-2.0
 package historyleveldb
 
 import (
-	"bytes"
+  "bytes"
+  "context"
+  "time"
+  "fmt"
 
 	commonledger "github.com/hyperledger/fabric/common/ledger"
 	"github.com/hyperledger/fabric/common/ledger/blkstorage"
@@ -16,10 +19,14 @@ import (
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/rwsetutil"
 	"github.com/hyperledger/fabric/core/ledger/ledgerconfig"
 	"github.com/hyperledger/fabric/protos/common"
+	"github.com/hyperledger/fabric/protos/peer"
 	"github.com/hyperledger/fabric/protos/ledger/queryresult"
 	putils "github.com/hyperledger/fabric/protos/utils"
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
+
+  "github.com/spf13/viper"
+  "google.golang.org/grpc"
 )
 
 // LevelHistoryDBQueryExecutor is a query executor against the LevelDB history DB
@@ -43,6 +50,31 @@ func (q *LevelHistoryDBQueryExecutor) GetHistoryForKey(namespace string, key str
 	// range scan to find any history records starting with namespace~key
 	dbItr := q.historyDB.db.GetIterator(compositeStartKey, compositeEndKey)
 	return newHistoryScanner(compositeStartKey, namespace, key, dbItr, q.blockStore), nil
+}
+
+// GetHistorForKeyRemotely implements method in interface `ledger.HistoryQueryExecutor`
+func (q *LevelHistoryDBQueryExecutor) GetHistoryForKeyRemotely(namespace string, key string) (*peer.QueryResponse, error) {
+
+  concord := viper.GetString("concord.address")
+  conn, err := grpc.Dial(concord, grpc.WithInsecure())
+
+  if err != nil {
+    logger.Fatalf("did not connect: %v", err)
+    return nil, err
+  }
+
+  client := peer.NewAccessClient(conn)
+  ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+  defer cancel()
+
+  kvbKey := fmt.Sprintf("%v-%v", namespace, key)
+  res, err := client.GetHistoryForKey(ctx, &peer.KvbMessage{Key: &kvbKey});
+
+  if err != nil {
+    return nil, errors.Wrap(err, "unmarshal failed")
+  }
+
+	return res, nil
 }
 
 //historyScanner implements ResultsIterator for iterating through history results

@@ -39,11 +39,11 @@ func newLockBasedTxSimulator(txmgr *LockBasedTxMgr, txid string) (*lockBasedTxSi
 
 	// init a gRPC client 
   concord := viper.GetString("concord.address")
+  logger.Infof("Trying to connect concord: %v", concord)
   conn, err := grpc.Dial(concord, grpc.WithInsecure())
-	//conn, err := grpc.Dial("10.192.101.235:50051", grpc.WithInsecure())
-        if err != nil {
-                logger.Fatalf("did not connect: %v", err)
-        }
+  if err != nil {
+    logger.Errorf("did not connect: %v", err)
+  }
 	client := pb.NewAccessClient(conn)
 
 	logger.Debugf("constructing new tx simulator txid = [%s]", txid)
@@ -61,10 +61,11 @@ func (s *lockBasedTxSimulator) SetState(ns string, key string, value []byte) err
 
 func (s *lockBasedTxSimulator) GetRemoteState(ns string, key string) ([]byte, error) {
 // use grpc client get state here !!!
-        ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-        defer cancel()
+  ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+  defer cancel()
 	kvbKey :=  fmt.Sprintf("%v-%v", ns, key)
 	kvbState := pb.KvbMessage_VALID
+
 	res, err := s.accessClient.GetState(ctx, &pb.KvbMessage{State: &kvbState, Key:  &kvbKey})
 	if err != nil{
 	    return nil, err
@@ -73,6 +74,7 @@ func (s *lockBasedTxSimulator) GetRemoteState(ns string, key string) ([]byte, er
 	resBytes := []byte(resString)
 
 	// hard code version here
+  // TODO(luke) replace the hard-code version with real value
 	s.rwsetBuilder.AddToReadSet(ns, key, &version.Height{999, 999})
 	return resBytes, nil
 }

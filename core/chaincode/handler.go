@@ -817,21 +817,13 @@ func (h *Handler) HandleGetHistoryForKey(msg *pb.ChaincodeMessage, txContext *Tr
 		return nil, errors.Wrap(err, "unmarshal failed")
 	}
 
-	historyIter, err := txContext.HistoryQueryExecutor.GetHistoryForKey(chaincodeName, getHistoryForKey.Key)
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
+  // payloadBytes is byte array of QueryResponseConcord type
+  // need to convert it to QueryResponse type
+	//payloadBytes, err := txContext.HistoryQueryExecutor.GetHistoryForKey(chaincodeName, getHistoryForKey.Key)
+	queryResponse, err := txContext.HistoryQueryExecutor.GetHistoryForKeyRemotely(chaincodeName, getHistoryForKey.Key)
 
-	totalReturnLimit := calculateTotalReturnLimit(nil)
+	payloadBytes, err := proto.Marshal(queryResponse)
 
-	txContext.InitializeQueryContext(iterID, historyIter)
-	payload, err := h.QueryResponseBuilder.BuildQueryResponse(txContext, historyIter, iterID, false, totalReturnLimit)
-	if err != nil {
-		txContext.CleanupQueryContext(iterID)
-		return nil, errors.WithStack(err)
-	}
-
-	payloadBytes, err := proto.Marshal(payload)
 	if err != nil {
 		txContext.CleanupQueryContext(iterID)
 		return nil, errors.Wrap(err, "marshal failed")
